@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Sachindra Nath Sanyal — The Time Tunnel</title>
+<meta name="description" content="An interactive 3D historical exhibition on the life of Sachindra Nath Sanyal (1893–1942)." />
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/cinzel@5/index.css" />
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/cinzel@5/600.css" />
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/cormorant-garamond@5/index.css" />
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/cormorant-garamond@5/500.css" />
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/cormorant-garamond@5/600.css" />
+<link rel="stylesheet" href="./css/style.css" />
+<link rel="icon" href="data:," />
+
+<!-- Critical fallback styling, inlined so it cannot 404.
+     Without this, a missing css/style.css takes `.hidden{display:none}` with it
+     and the browser paints every panel, overlay and HUD label at once as raw
+     serif text. These few rules keep the page dark and quiet long enough for
+     the check below to explain what actually went wrong. -->
+<style>
+  /* Only rules that are also in the real stylesheet, so this can never fight
+     it. `.hidden` is the important one: every panel and overlay relies on it,
+     and losing it is what turns a missing stylesheet into a wall of text. */
+  html,body{ margin:0; height:100%; background:#0d0c0a; color:#e6dcc3;
+             font-family:Georgia,"Times New Roman",serif; overflow:hidden; }
+  .hidden{ display:none !important; }
+  #scene{ position:fixed; inset:0; width:100%; height:100%; display:block; }
+</style>
+<script type="importmap">
+{
+  "imports": {
+    "three": "./vendor/three/three.module.js",
+    "three/addons/": "./vendor/three/examples/jsm/"
+  }
+}
+</script>
+</head>
+<body>
+
+<canvas id="scene"></canvas>
+
+<!-- ══════════════════════════ LOADING ══════════════════════════ -->
+<div id="loading" class="veil">
+  <div class="veil-inner">
+    <div class="rule-sm"></div>
+    <p class="loading-text">PREPARING THE EXHIBITION</p>
+    <div class="loading-bar"><span></span></div>
+  </div>
+</div>
+
+<!-- ══════════════════════════ START SCREEN ══════════════════════════ -->
+<div id="start" class="veil hidden">
+  <div class="veil-inner start-inner">
+    <p class="start-eyebrow">AN INTERACTIVE JOURNEY THROUGH HISTORY</p>
+    <h1 class="start-name">SACHINDRA NATH SANYAL</h1>
+    <div class="start-rule"><span></span><em>1893 — 1942</em><span></span></div>
+    <p class="start-sub">
+      Walk forward and time moves with you. Each step down the corridor is a step
+      through the recorded history of a revolutionary, a prisoner and a writer.
+    </p>
+    <button id="beginBtn" type="button">BEGIN THE JOURNEY</button>
+    <p class="start-controls">
+      <b>W A S D</b> move &nbsp;·&nbsp; <b>SHIFT</b> hurry &nbsp;·&nbsp; <b>MOUSE</b> look &nbsp;·&nbsp;
+      <b>E</b> explore &nbsp;·&nbsp; <b>T</b> full timeline &nbsp;·&nbsp;
+      <b>M</b> music &amp; sound &nbsp;·&nbsp; <b>ESC</b> release cursor
+    </p>
+    <p class="start-note">
+      This is an educational exhibition, not a game. Every panel carries its date,
+      its degree of connection to Sanyal, and its sources. Where the historical
+      record is uncertain, the exhibition says so.
+    </p>
+  </div>
+</div>
+
+<!-- ══════════════════════════ HUD ══════════════════════════ -->
+<div id="hud" class="hidden">
+
+  <!-- top-centre timeline indicator -->
+  <div id="hud-timeline">
+    <div class="tl-row">
+      <span class="tl-end">1893</span>
+      <div class="tl-track">
+        <div class="tl-line"></div>
+        <div class="tl-trail" id="tlTrail"></div>
+        <div class="tl-zones" id="tlZones"></div>
+        <div class="tl-dot" id="tlDot"></div>
+      </div>
+      <span class="tl-end">1942</span>
+    </div>
+    <div class="tl-meta">
+      <span class="tl-year" id="tlYear">1893</span>
+      <span class="tl-sep">·</span>
+      <span class="tl-caption">CURRENT PERIOD</span>
+      <span class="tl-period" id="tlPeriod">ENTRANCE</span>
+    </div>
+  </div>
+
+  <!-- bottom-left -->
+  <div class="hud-corner hud-bl">
+    <div class="keycluster">
+      <span class="key">W</span>
+      <div><span class="key">A</span><span class="key">S</span><span class="key">D</span></div>
+    </div>
+    <p class="hud-label">MOVE</p>
+  </div>
+
+  <!-- bottom-right -->
+  <div class="hud-corner hud-br">
+    <p class="hud-label">LOOK</p>
+    <p class="hud-key-line"><span class="key wide">MOUSE</span></p>
+    <p class="hud-key-line dim"><span class="key wide">T</span> TIMELINE &nbsp; <span class="key wide">M</span> SOUND</p>
+  </div>
+
+  <!-- reticle + interaction prompt -->
+  <div id="reticle"></div>
+  <div id="prompt" class="hidden">
+    <span class="key">E</span><span id="promptText">EXPLORE EVENT</span>
+  </div>
+
+  <!-- touch movement stick (left half); the right half is the look area -->
+  <div id="stick" class="hidden"><span id="stickKnob"></span></div>
+
+  <!-- brief music-state toast -->
+  <div id="musicToast" class="hidden"></div>
+
+  <!-- soft zone-change title card -->
+  <div id="zoneCard" class="hidden">
+    <p class="zc-years" id="zcYears"></p>
+    <h2 class="zc-name" id="zcName"></h2>
+    <div class="zc-rule"></div>
+  </div>
+</div>
+
+<!-- ══════════════════════════ EVENT PANEL ══════════════════════════ -->
+<aside id="panel" class="hidden" role="dialog" aria-modal="false" aria-labelledby="pTitle">
+  <div class="panel-scroll">
+    <div class="panel-head" data-reveal>
+      <span class="panel-kicker" id="pKicker">EVENT</span>
+      <span class="tag" id="pTag">DIRECT INVOLVEMENT</span>
+    </div>
+    <h2 id="pTitle" data-reveal>—</h2>
+    <p id="pSubtitle" class="panel-sub" data-reveal>—</p>
+
+    <div id="pRibbon" class="ribbon hidden" data-reveal>
+      <div class="ribbon-head"><span>1893</span><b id="pRibbonLabel">—</b><span>1942</span></div>
+      <div class="ribbon-track"><i id="pRibbonFill"></i></div>
+    </div>
+
+    <div class="panel-facts" data-reveal>
+      <div><span class="fk">YEAR / DATE</span><span class="fv" id="pDate">—</span></div>
+      <div><span class="fk">LOCATION</span><span class="fv" id="pPlace">—</span></div>
+    </div>
+
+    <section data-reveal><h3>HISTORICAL CONTEXT</h3><p id="pWhat">—</p></section>
+    <section data-reveal><h3>WHY IT MATTERS</h3><p id="pWhy">—</p></section>
+    <section id="pFactsWrap" class="hidden" data-reveal><h3>POINTS OF NOTE</h3><ul id="pFacts" class="facts"></ul></section>
+    <section id="pImpactWrap" class="hidden" data-reveal><h3>IMPACT</h3><p id="pImpact">—</p></section>
+    <section id="pNoteWrap" class="hidden note" data-reveal><h3>NOTE ON THE RECORD</h3><p id="pNote">—</p></section>
+
+    <section id="pPeopleWrap" class="hidden" data-reveal>
+      <h3>RELATED PEOPLE AND BODIES</h3>
+      <div class="cards" id="pPeople"></div>
+    </section>
+
+    <section id="pNearbyWrap" class="hidden" data-reveal>
+      <h3>ELSEWHERE IN THIS PERIOD</h3>
+      <div class="nearby" id="pNearby"></div>
+    </section>
+
+    <section data-reveal><h3>SOURCES</h3><ul id="pSources"></ul></section>
+    <div class="panel-actions" data-reveal>
+      <button type="button" id="pPrev" class="ghost" aria-label="Previous entry">← PREVIOUS</button>
+      <button type="button" id="pNext" class="ghost" aria-label="Next entry">NEXT →</button>
+      <button type="button" id="pNarrate" class="ghost hidden">▶ PLAY NARRATION</button>
+      <button type="button" id="pClose" class="ghost">ESC — CLOSE</button>
+    </div>
+  </div>
+</aside>
+
+<!-- ══════════════════════════ FULL TIMELINE (T) ══════════════════════════ -->
+<div id="timelineOverlay" class="hidden">
+  <div class="to-wrap">
+    <header class="to-head">
+      <div>
+        <p class="to-kicker">FULL TIMELINE</p>
+        <h2>SACHINDRA NATH SANYAL — 1893 to 1942</h2>
+      </div>
+      <button type="button" id="toClose" class="ghost">T / ESC — CLOSE</button>
+    </header>
+    <div class="to-body">
+      <nav class="to-tree" id="toTree"></nav>
+      <div class="to-detail" id="toDetail">
+        <p class="to-hint">Select an entry to read it, then choose <b>LOCATE IN EXHIBITION</b>
+        to be guided to where it stands in the corridor.</p>
+      </div>
+    </div>
+    <footer class="to-foot">
+      <span class="legend"><i class="sw direct"></i> DIRECT INVOLVEMENT</span>
+      <span class="legend"><i class="sw broader"></i> BROADER EVENT — NOT SANYAL'S ACT</span>
+      <span class="legend"><i class="sw context"></i> HISTORICAL CONTEXT</span>
+    </footer>
+  </div>
+</div>
+
+<!-- ══════════════════════════ RESUME ══════════════════════════ -->
+<div id="resume" class="veil soft hidden">
+  <div class="veil-inner">
+    <p class="resume-title">CURSOR RELEASED</p>
+    <p class="resume-sub">Click anywhere to continue walking</p>
+    <p class="resume-music"><span id="musicState">♫ MUSIC: ON</span> &nbsp;·&nbsp; press <b>M</b> to toggle</p>
+    <button type="button" id="musicBtn" class="ghost">♫ MUSIC ON / OFF</button>
+  </div>
+</div>
+
+<!-- guided-walk banner -->
+<div id="guide" class="hidden">
+  <span class="guide-dot"></span>
+  <span id="guideText">WALKING TO EXHIBIT…</span>
+  <button type="button" id="guideCancel">CANCEL</button>
+</div>
+
+<!-- fatal error notice (keeps the console clean for the visitor) -->
+<div id="fatal" class="veil hidden">
+  <div class="veil-inner">
+    <p class="loading-text">THE EXHIBITION COULD NOT LOAD</p>
+    <p id="fatalMsg" class="start-note"></p>
+  </div>
+</div>
+
+<script type="module" src="./js/main.js"></script>
+
+<!--
+  Deployment self-check. Plain script, not a module, so it still runs when the
+  module graph fails to load. If the stylesheet or the application never
+  arrived — the usual cause being that only the top-level files were uploaded
+  and the css/, js/, vendor/ and assets/ folders were left behind — this asks
+  the server which files are actually missing and says so, rather than leaving
+  a page of unstyled text with no explanation.
+-->
+<script>
+(function () {
+  var CRITICAL = ['./css/style.css', './js/main.js', './vendor/three/three.module.js',
+                  './vendor/three/examples/jsm/utils/BufferGeometryUtils.js'];
+  var OPTIONAL = ['./assets/sanyal-portrait.jpg', './assets/audio/background.mp3'];
+
+  function styleSheetLoaded() {
+    var probe = document.createElement('div');
+    probe.className = 'veil';                 // fixed-position only in style.css
+    probe.style.visibility = 'hidden';
+    document.body.appendChild(probe);
+    var ok = getComputedStyle(probe).position === 'fixed';
+    probe.remove();
+    return ok;
+  }
+
+  function report(missing, cssOK, jsOK) {
+    var box = document.createElement('div');
+    box.setAttribute('style', [
+      'position:fixed;inset:0;z-index:99999;overflow:auto',
+      'background:#0d0c0a;color:#e6dcc3',
+      'font:15px/1.7 Georgia,"Times New Roman",serif',
+      'padding:8vh 6vw'
+    ].join(';'));
+    var gold = 'color:#b9963f;font:600 11px/1.6 Helvetica,Arial,sans-serif;letter-spacing:.3em';
+    box.innerHTML =
+      '<p style="' + gold + '">DEPLOYMENT INCOMPLETE</p>' +
+      '<h1 style="font:400 30px/1.3 Georgia,serif;color:#f5efe2;margin:14px 0 18px">' +
+        'Some of this exhibition did not reach the server.</h1>' +
+      '<p style="max-width:70ch;color:#b9ae95">index.html loaded, but ' +
+        (cssOK ? '' : 'the stylesheet ') + (!cssOK && !jsOK ? 'and ' : '') +
+        (jsOK ? '' : 'the application ') +
+        'could not be fetched. These files returned an error:</p>' +
+      '<ul style="max-width:70ch;margin:16px 0 22px;padding-left:20px;color:#e6dcc3">' +
+        missing.map(function (m) {
+          return '<li style="margin:6px 0"><code>' + m.path + '</code> — <b style="color:#c07260">' +
+                 m.status + '</b></li>';
+        }).join('') +
+      '</ul>' +
+      '<p style="' + gold + '">HOW TO FIX</p>' +
+      '<p style="max-width:70ch;color:#b9ae95;margin-top:10px">Upload the whole project folder, not just the ' +
+        'files at the top level. The repository must contain <code>index.html</code> alongside the ' +
+        '<code>css/</code>, <code>js/</code>, <code>vendor/</code> and <code>assets/</code> folders, ' +
+        'keeping the same structure and the same lower-case names.</p>' +
+      '<p style="max-width:70ch;color:#b9ae95;margin-top:14px">Dragging files into GitHub’s web ' +
+        'uploader often misses folders. Pushing with git includes everything:</p>' +
+      '<pre style="margin-top:12px;padding:14px 16px;background:#17150f;border:1px solid rgba(185,150,63,.25);' +
+        'color:#e6dcc3;font:13px/1.6 Consolas,monospace;overflow:auto">git add -A\ngit commit -m "add missing folders"\ngit push</pre>';
+    document.body.appendChild(box);
+  }
+
+  function check() {
+    var cssOK = styleSheetLoaded();
+    var jsOK  = window.__EXHIBITION_BOOTED === true;
+    if (cssOK && jsOK) return;                       // everything is fine
+
+    var paths = CRITICAL.concat(OPTIONAL), missing = [], done = 0;
+    paths.forEach(function (p) {
+      fetch(p, { method: 'GET', cache: 'no-store' })
+        .then(function (r) { if (!r.ok) missing.push({ path: p, status: r.status + ' ' + r.statusText }); })
+        .catch(function ()  { missing.push({ path: p, status: 'not reachable' }); })
+        .then(function () {
+          if (++done < paths.length) return;
+          if (!missing.length) {
+            missing.push({ path: '(all files fetched, but the application did not start)',
+                           status: 'see the browser console' });
+          }
+          report(missing, cssOK, jsOK);
+        });
+    });
+  }
+
+  // generous: the exhibition waits on webfonts and builds its textures first
+  window.addEventListener('load', function () { setTimeout(check, 9000); });
+})();
+</script>
+</body>
+</html>

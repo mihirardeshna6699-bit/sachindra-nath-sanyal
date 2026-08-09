@@ -1,0 +1,29 @@
+# dependencies / build output (this project needs neither, but keep them out)
+node_modules/
+dist/
+build/
+.cache/
+*.tsbuildinfo
+
+# environment / secrets — never commit real keys
+.env
+.env.*
+!.env.example
+
+# logs and temporary files
+*.log
+npm-debug.log*
+.tmp/
+.shots/
+
+# OS and editor junk
+.DS_Store
+Thumbs.db
+desktop.ini
+.idea/
+.vscode/
+*.swp
+*~
+
+# NOTE: assets/ is intentionally NOT ignored — the portrait, the audio and the
+# bundled copy of Three.js in vendor/ are all required for the site to run.
