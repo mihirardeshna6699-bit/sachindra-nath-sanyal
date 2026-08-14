@@ -868,6 +868,7 @@ const state = {
   activeItem: null,
   zoneKey: 'entrance',
   muted: false,
+  releasingForPanel: false,  // pointer lock given up on purpose, to read a record
   guideTargetD: null,
   raf: 0
 };
@@ -4508,10 +4509,13 @@ function setupControls(){
     if (state.locked){
       $('resume').classList.add('hidden');
     } else if (state.started){
-      if (state.mode === 'reading' || state.mode === 'focusing'){
+      if (state.releasingForPanel){
+        state.releasingForPanel = false;        // we let go on purpose; keep reading
+      } else if (state.mode === 'reading' || state.mode === 'focusing'){
         closeEventPanel();
       }
-      if (!touch.isTouch && $('timelineOverlay').classList.contains('hidden')){
+      if (!touch.isTouch && state.mode !== 'reading' && state.mode !== 'focusing'
+          && $('timelineOverlay').classList.contains('hidden')){
         $('resume').classList.remove('hidden');
       }
     }
@@ -5469,6 +5473,17 @@ function toRecord(payload){
 function showEventPanel(payload){
   const r = toRecord(payload);
   if (!r) return;
+
+  /* Hand the mouse back while the record is open. Under pointer lock the cursor
+     is hidden and captured by the canvas, so the wheel never reaches the panel
+     and its buttons cannot be clicked. `releasingForPanel` tells the lock-change
+     handler this release was deliberate, so it does not read it as the visitor
+     leaving and close the panel again. */
+  if (document.pointerLockElement){
+    state.releasingForPanel = true;
+    document.exitPointerLock();
+  }
+
   music.pausedForInfo = true;      // set before the fade so a rapid E/ESC cannot race it
   musicSuspend(900);
   const p = $('panel');
@@ -5597,6 +5612,11 @@ function stepEntry(delta){
 }
 
 function closeEventPanel(){
+  // the panel released the pointer, so invite the visitor to re-lock and walk on
+  if (state.started && !touch.isTouch && !document.pointerLockElement &&
+      $('timelineOverlay').classList.contains('hidden')){
+    $('resume').classList.remove('hidden');
+  }
   music.pausedForInfo = false;
   musicResume(1000);              // no-ops while music.enabled is false
   const p = $('panel');
